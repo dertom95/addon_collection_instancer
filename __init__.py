@@ -59,7 +59,7 @@ class CIO_COLLECTION_TYPE(bpy.types.PropertyGroup):
 class CIO_HIERARCHY(bpy.types.PropertyGroup):
     active          : bpy.props.BoolProperty(default=True)
     collection_path : bpy.props.CollectionProperty(type=CIO_COLLECTION_TYPE)
-    icon_scale  : bpy.props.FloatProperty()    
+    icon_scale  : bpy.props.FloatProperty(default=6.0)    
     detail_for_parent_collections : bpy.props.BoolProperty(description="Show Details also for non-leaf-collections")
 
 class CIO_WRLD_Settings(bpy.types.PropertyGroup):
@@ -67,6 +67,7 @@ class CIO_WRLD_Settings(bpy.types.PropertyGroup):
     hierarchies : bpy.props.CollectionProperty(type=CIO_HIERARCHY)
     icon_folder : bpy.props.StringProperty(subtype="DIR_PATH")
     view_type   : bpy.props.IntProperty()
+    icon_size   : bpy.props.FloatProperty(default=6)
        
 
 
@@ -177,7 +178,7 @@ class CIO_OT_Manage_hierarchies(bpy.types.Operator):
                                 ,output_folder=output_path_iso
                                 ,render_width=ICON_SIZE
                                 ,render_height=ICON_SIZE
-                                ,cam_delta_scale=hierarchy.icon_scale
+                                ,cam_ortho_scale=hierarchy.icon_scale
                                 ,remove_scene=True)
 
                 bpy.ops.tmc.render_tiles(scene_name="tilemap_scene"
@@ -185,7 +186,7 @@ class CIO_OT_Manage_hierarchies(bpy.types.Operator):
                                 ,output_folder=output_path_top
                                 ,render_width=ICON_SIZE
                                 ,render_height=ICON_SIZE
-                                ,cam_delta_scale=hierarchy.icon_scale
+                                ,cam_ortho_scale=hierarchy.icon_scale
                                 ,cam_preset="cam_top_down"
                                 ,remove_scene=True)                                
 
@@ -298,10 +299,19 @@ class CIO_PT_main(bpy.types.Panel):
             op.idx=CIO_VIEWTYPE_TEXT_ICON_DETAIL
             op.desc = "List View (Detail, ISO-TopDwon-Icons)"
 
-        # op = row.operator("cio.manage_hierarchies",icon="SNAP_VERTEX",text="")
-        # op.operation = CIO_OP_SET_VIEWTYPE
-        # op.idx=CIO_VIEWTYPE_ICON
-        # op.desc = "Icon View"
+            op = row.operator("cio.manage_hierarchies",icon="SNAP_VERTEX",text="")
+            op.operation = CIO_OP_SET_VIEWTYPE
+            op.idx=CIO_VIEWTYPE_ICON
+            op.desc = "Icon View"
+
+
+
+
+        row.prop(settings,"icon_size",text="Icon Size")
+
+
+        row = without_children_box.row()
+
 
         # TODO: Think about a viable way to enable previews for parent-collections.
         # if hierarchy.detail_for_parent_collections:
@@ -310,6 +320,9 @@ class CIO_PT_main(bpy.types.Panel):
         #     row.prop(hierarchy,"detail_for_parent_collections",text="",icon="ZOOM_IN")
 
         current_box = None
+
+        b1=None
+        b2=None
         for idx,col in enumerate(current_collection.children):
             has_children = len(col.children)>0
 
@@ -319,7 +332,7 @@ class CIO_PT_main(bpy.types.Panel):
             if iso_img_lib:
                 col_icon_iso = iso_img_lib.get("%s.png"%col.name)
                 col_icon_top = top_img_lib.get("%s.png"%col.name)
-                found_icons = True
+                found_icons = col_icon_top is not None
 
             if has_children:            
                 current_box = with_children_box
@@ -338,8 +351,22 @@ class CIO_PT_main(bpy.types.Panel):
             else:
                 if settings.view_type==CIO_VIEWTYPE_TEXT:
                     current_box = without_children_box
-                else:
+                elif settings.view_type==CIO_VIEWTYPE_TEXT_ICON_DETAIL:
                     current_box = without_children_box.box()
+                elif settings.view_type==CIO_VIEWTYPE_ICON:
+                    if idx%2==0:
+                        row = without_children_box.row()
+                        col1 = row.column()
+                        col2 = row.column()
+                        b1 = col1.box()
+                        b2 = col2.box()
+                        if idx+1 >= len(current_collection.children):
+                            b2.label(text="empty",icon="META_PLANE")
+                        current_box = b1
+                        print("B111")
+                    else:
+                        current_box = b2
+                        print("B22")
 
                 row = current_box.row()
                 if found_icons and settings.view_type==CIO_VIEWTYPE_TEXT:
@@ -356,10 +383,11 @@ class CIO_PT_main(bpy.types.Panel):
                 row = current_box.row()
 
                 if settings.view_type==CIO_VIEWTYPE_TEXT_ICON_DETAIL:
-                    row.template_icon(icon_value=col_icon_iso.icon_id,scale=6.0)
-                    row.template_icon(icon_value=col_icon_top.icon_id,scale=6.0)
+                    row.template_icon(icon_value=col_icon_iso.icon_id,scale=settings.icon_size)
+                    row.template_icon(icon_value=col_icon_top.icon_id,scale=settings.icon_size)
                 elif settings.view_type==CIO_VIEWTYPE_ICON:
-                    row.template_icon(icon_value=col_icon_top.icon_id,scale=6.0)
+                    print("%s | %s | %s" % (col.name,found_icons,col_icon_top))
+                    row.template_icon(icon_value=col_icon_iso.icon_id,scale=settings.icon_size)
 
                 
 
@@ -407,7 +435,7 @@ class CIO_PT_main(bpy.types.Panel):
                         col.enabled=False
 
                     row = innerbox.row()
-                    row.prop(hierarchy,"icon_scale",text="icon scale delta")
+                    row.prop(hierarchy,"icon_scale",text="cam otho scale")
 
             row = box.row()
             row.prop(settings,"icon_folder")

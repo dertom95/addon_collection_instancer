@@ -78,7 +78,7 @@ class TMC_OT_Render_tiles(bpy.types.Operator):
     output_folder   : bpy.props.StringProperty()
     cam_preset      : bpy.props.StringProperty(default=TMC_Operations.TMC_CAM_PRESET_ISO)
     remove_scene    : bpy.props.BoolProperty(default=False)
-    cam_delta_scale : bpy.props.FloatProperty()
+    cam_ortho_scale : bpy.props.FloatProperty(default=5.0)
 
     def set_camera_preset(self,cam,preset):
         if preset == TMC_Operations.TMC_CAM_PRESET_FRONTAL45:
@@ -105,7 +105,7 @@ class TMC_OT_Render_tiles(bpy.types.Operator):
         # create camera
         cam = bpy.data.cameras.new("__tilemap_cam")
         cam.type="ORTHO"
-        cam.ortho_scale = 6.0 + self.cam_delta_scale
+        cam.ortho_scale = self.cam_ortho_scale
 
         camnode = bpy.data.objects.new("__timemap_camnode",cam)
         self.set_camera_preset(camnode,self.cam_preset)
