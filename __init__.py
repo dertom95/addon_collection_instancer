@@ -20,10 +20,12 @@ ICON_SIZE = 128
 
 def load_icons(key,folder):
     pcoll = preview_collections.get(key)
-    if not pcoll:
-        pcoll = bpy.utils.previews.new()
-        preview_collections[key]=pcoll
+    if pcoll:
+        bpy.utils.previews.remove(pcoll)
 
+    pcoll = bpy.utils.previews.new()
+    preview_collections[key]=pcoll
+    
 
     directory = os.fsencode(folder)
     
@@ -38,7 +40,9 @@ def get_image_lib(key):
     return preview_collections.get(key)
 
 def has_tile_creator_addon():
-    return "addon_tilemap_creator" in bpy.context.preferences.addons
+    #return "addon_tilemap_creator" in bpy.context.preferences.addons
+    # if addon is not present use nested operators (not sure about the best-case here)
+    return True
 
 def parent_collection_to_csv_children(parent_collection,collection_names="",recursive=False):
     for child in parent_collection.children:
@@ -56,12 +60,14 @@ class CIO_HIERARCHY(bpy.types.PropertyGroup):
     active          : bpy.props.BoolProperty(default=True)
     collection_path : bpy.props.CollectionProperty(type=CIO_COLLECTION_TYPE)
     icon_scale  : bpy.props.FloatProperty()    
+    detail_for_parent_collections : bpy.props.BoolProperty(description="Show Details also for non-leaf-collections")
 
 class CIO_WRLD_Settings(bpy.types.PropertyGroup):
     show_manage_hierachy_menu : bpy.props.BoolProperty(name="Hierarchy Manager",default=False)
     hierarchies : bpy.props.CollectionProperty(type=CIO_HIERARCHY)
     icon_folder : bpy.props.StringProperty(subtype="DIR_PATH")
-    float       
+    view_type   : bpy.props.IntProperty()
+       
 
 
 CIO_OP_ADD_HIERARCHY = "add_hierarchy"
@@ -71,9 +77,29 @@ CIO_OP_MOVEBACK_HIERARCHY_ITEM = "moveback_hierarchy_item"
 CIO_OP_CREATE_INSTANCE = "create_instance"
 CIO_OP_CREATE_TILE_PREVIEW = "render_tile_previews"
 CIO_OP_LOAD_TILE_PREVIEWS = "load_tile_previews"
+CIO_OP_SET_VIEWTYPE = "set_viewtype"
+
+CIO_VIEWTYPE_TEXT = 0
+CIO_VIEWTYPE_TEXT_ICON_DETAIL = 1
+CIO_VIEWTYPE_ICON = 2
 
 
 preview_collections = {}
+
+def check_for_img_library(hierarchy,load=False):
+    root_name = hierarchy.collection_path[0].collection.name
+    iso_img_lib = get_image_lib("%s_iso"%root_name)
+    top_img_lib = get_image_lib("%s_top"%root_name)
+    if not iso_img_lib or not top_img_lib:
+        if load:
+            bpy.ops.cio.manage_hierarchies(operation=CIO_OP_LOAD_TILE_PREVIEWS)
+            return True
+        else:
+            return False
+
+    return True
+
+
 
 class CIO_OT_Manage_hierarchies(bpy.types.Operator):
     """"""
@@ -85,6 +111,13 @@ class CIO_OT_Manage_hierarchies(bpy.types.Operator):
     idx       : bpy.props.IntProperty()    # generic idx-value
     hidx      : bpy.props.IntProperty()    # hierarchy idx
     col_name  : bpy.props.StringProperty() # col_name as string
+
+    desc: bpy.props.StringProperty()
+
+    @classmethod
+    def description(cls, context, properties):
+        return properties.desc
+
 
     def execute(self, context):
         settings = bpy.context.scene.world.cioSettings
@@ -169,6 +202,10 @@ class CIO_OT_Manage_hierarchies(bpy.types.Operator):
                         print("TRY TO LOAD %s | %s" %(input_path_iso,col.name))
                         load_icons("%s_top"%col.name,input_path_top)
                         load_icons("%s_iso"%col.name,input_path_iso)
+        elif self.operation==CIO_OP_SET_VIEWTYPE:
+            settings.view_type = self.idx
+            hierarchy = settings.hierarchies[self.hidx]
+            check_for_img_library(hierarchy,True)
 
         return{'FINISHED'}
 
@@ -196,6 +233,8 @@ class CIO_PT_main(bpy.types.Panel):
     def draw_hierarchy(self, hidx,hierarchy, layout):
         if not hierarchy:
             return
+
+        settings = bpy.context.scene.world.cioSettings
 
         current_collection = None
         points = ""
@@ -241,37 +280,83 @@ class CIO_PT_main(bpy.types.Panel):
         with_children_box = box.box()
         without_children_box = box.box()
         without_children_amount=0
+        
+        # header
+        header = without_children_box.box()
+        row = header.row()
+        op = row.operator("cio.manage_hierarchies",icon="PRESET",text="")
+        op.operation = CIO_OP_SET_VIEWTYPE
+        op.idx = CIO_VIEWTYPE_TEXT
+        op.desc = "List View (Text)"
+
+        op = row.operator("cio.manage_hierarchies",icon="SNAP_EDGE",text="")
+        op.operation = CIO_OP_SET_VIEWTYPE
+        op.idx=CIO_VIEWTYPE_TEXT_ICON_DETAIL
+        op.desc = "List View (Detail, ISO-TopDwon-Icons)"
+
+        op = row.operator("cio.manage_hierarchies",icon="SNAP_VERTEX",text="")
+        op.operation = CIO_OP_SET_VIEWTYPE
+        op.idx=CIO_VIEWTYPE_ICON
+        op.desc = "Icon View"
+
+        # TODO: Think about a viable way to enable previews for parent-collections.
+        # if hierarchy.detail_for_parent_collections:
+        #     row.prop(hierarchy,"detail_for_parent_collections",text="",icon="ZOOM_OUT")
+        # else:
+        #     row.prop(hierarchy,"detail_for_parent_collections",text="",icon="ZOOM_IN")
+
+        current_box = None
         for idx,col in enumerate(current_collection.children):
-            if len(col.children)>0:
-                row = with_children_box.row()
+            has_children = len(col.children)>0
+
+            col_icon_iso = None
+            col_icon_top = None
+            found_icons = False
+            if iso_img_lib:
+                col_icon_iso = iso_img_lib.get("%s.png"%col.name)
+                col_icon_top = top_img_lib.get("%s.png"%col.name)
+                found_icons = True
+
+            if has_children:            
+                current_box = with_children_box
+                row = current_box.row()
+                op = None
+                # if found_icons and settings.view_type==CIO_VIEWTYPE_TEXT: 
+                #     op = row.operator("cio.manage_hierarchies",text=col.name,icon_value=col_icon_iso.icon_id) 
+                # else:
+                #     op = row.operator("cio.manage_hierarchies",text=col.name) 
                 op = row.operator("cio.manage_hierarchies",text=col.name) 
+
                 op.operation = CIO_OP_ADD_HIERARCHY_ITEM
                 op.col_name = col.name
                 op.hidx = hidx
-
-                op = row.operator("cio.manage_hierarchies",text="",icon="OUTLINER_OB_GROUP_INSTANCE")
-                op.operation=CIO_OP_CREATE_INSTANCE
-                op.col_name=col.name 
+                op.desc = "Jump in Collection %s" % col.name
             else:
-                row = without_children_box.row()
-                col_icon_iso = None
-                col_icon_top = None
-                if iso_img_lib:
-                    col_icon_iso = iso_img_lib.get("%s.png"%col.name)
-                    col_icon_top = top_img_lib.get("%s.png"%col.name)
-
-                if col_icon_iso:
-                    row.label(text=col.name,icon_value=col_icon_iso.icon_id)
-                    row=without_children_box.row()
-                    row.template_icon(icon_value=col_icon_iso.icon_id,scale=6.0)
-                    row.template_icon(icon_value=col_icon_top.icon_id,scale=6.0)
+                if settings.view_type==CIO_VIEWTYPE_TEXT:
+                    current_box = without_children_box
                 else:
+                    current_box = without_children_box.box()
+
+                row = current_box.row()
+                if found_icons and settings.view_type==CIO_VIEWTYPE_TEXT:
+                    row.label(text=col.name,icon_value=col_icon_iso.icon_id)
+                else:                    
                     row.label(text=col.name)
 
-                op = row.operator("cio.manage_hierarchies",text="",icon="OUTLINER_OB_GROUP_INSTANCE")
-                op.operation=CIO_OP_CREATE_INSTANCE
-                op.col_name=col.name 
-                without_children_amount = without_children_amount + 1
+            op = row.operator("cio.manage_hierarchies",text="",icon="OUTLINER_OB_GROUP_INSTANCE")
+            op.operation=CIO_OP_CREATE_INSTANCE
+            op.col_name=col.name 
+
+
+            if found_icons and (not has_children or hierarchy.detail_for_parent_collections):
+                row = current_box.row()
+
+                if settings.view_type==CIO_VIEWTYPE_TEXT_ICON_DETAIL:
+                    row.template_icon(icon_value=col_icon_iso.icon_id,scale=6.0)
+                    row.template_icon(icon_value=col_icon_top.icon_id,scale=6.0)
+                elif settings.view_type==CIO_VIEWTYPE_ICON:
+                    row.template_icon(icon_value=col_icon_top.icon_id,scale=6.0)
+
                 
 
 
@@ -347,6 +432,12 @@ classes =(
         # UI
         CIO_PT_main
 )
+
+if not "addon_tilemap_creator" in bpy.context.preferences.addons:
+    print("TRY TO LOAD")
+    from . tilemap_operators import TMC_OT_Render_tiles
+    print("DONE!!!!!!!")
+    classes += (TMC_OT_Render_tiles,)
 
 defRegister, defUnregister = bpy.utils.register_classes_factory(classes)
 
