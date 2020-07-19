@@ -189,19 +189,20 @@ class CIO_OT_Manage_hierarchies(bpy.types.Operator):
                                 ,cam_preset="cam_top_down"
                                 ,remove_scene=True)                                
 
-        elif self.operation==CIO_OP_LOAD_TILE_PREVIEWS:
-            icon_path = bpy.path.abspath(settings.icon_folder)
+        if self.operation==CIO_OP_LOAD_TILE_PREVIEWS or self.operation==CIO_OP_CREATE_TILE_PREVIEW:
+            if settings.icon_folder:
+                icon_path = bpy.path.abspath(settings.icon_folder)
 
-            for hierarchy in settings.hierarchies:
-                if len(hierarchy.collection_path)>0:
-                    col = hierarchy.collection_path[0].collection
-                    if col:
-                        input_path_iso = "%s/%s/iso/%s_%s" % (icon_path, col.name, ICON_SIZE,ICON_SIZE)
-                        input_path_top = "%s/%s/top/%s_%s" % (icon_path, col.name, ICON_SIZE,ICON_SIZE)
-                        
-                        print("TRY TO LOAD %s | %s" %(input_path_iso,col.name))
-                        load_icons("%s_top"%col.name,input_path_top)
-                        load_icons("%s_iso"%col.name,input_path_iso)
+                for hierarchy in settings.hierarchies:
+                    if len(hierarchy.collection_path)>0:
+                        col = hierarchy.collection_path[0].collection
+                        if col:
+                            input_path_iso = "%s/%s/iso/%s_%s" % (icon_path, col.name, ICON_SIZE,ICON_SIZE)
+                            input_path_top = "%s/%s/top/%s_%s" % (icon_path, col.name, ICON_SIZE,ICON_SIZE)
+                            
+                            print("TRY TO LOAD %s | %s" %(input_path_iso,col.name))
+                            load_icons("%s_top"%col.name,input_path_top)
+                            load_icons("%s_iso"%col.name,input_path_iso)
         elif self.operation==CIO_OP_SET_VIEWTYPE:
             settings.view_type = self.idx
             hierarchy = settings.hierarchies[self.hidx]
@@ -271,10 +272,12 @@ class CIO_PT_main(bpy.types.Panel):
         iso_img_lib = get_image_lib("%s_iso"%root_name)
         top_img_lib = get_image_lib("%s_top"%root_name)
         
-        if iso_img_lib:
-            print("FOUND IMAGE LIB: %s" % root_name)
-        else:
-            print("COULD NOT FIND IMG LIB:%s" % root_name)
+        found_image_lib = iso_img_lib is not None
+
+        # if iso_img_lib:
+        #     print("FOUND IMAGE LIB: %s" % root_name)
+        # else:
+        #     print("COULD NOT FIND IMG LIB:%s" % root_name)
 
         # draw collection-children of current collection
         with_children_box = box.box()
@@ -289,15 +292,16 @@ class CIO_PT_main(bpy.types.Panel):
         op.idx = CIO_VIEWTYPE_TEXT
         op.desc = "List View (Text)"
 
-        op = row.operator("cio.manage_hierarchies",icon="SNAP_EDGE",text="")
-        op.operation = CIO_OP_SET_VIEWTYPE
-        op.idx=CIO_VIEWTYPE_TEXT_ICON_DETAIL
-        op.desc = "List View (Detail, ISO-TopDwon-Icons)"
+        if found_image_lib:
+            op = row.operator("cio.manage_hierarchies",icon="SNAP_EDGE",text="")
+            op.operation = CIO_OP_SET_VIEWTYPE
+            op.idx=CIO_VIEWTYPE_TEXT_ICON_DETAIL
+            op.desc = "List View (Detail, ISO-TopDwon-Icons)"
 
-        op = row.operator("cio.manage_hierarchies",icon="SNAP_VERTEX",text="")
-        op.operation = CIO_OP_SET_VIEWTYPE
-        op.idx=CIO_VIEWTYPE_ICON
-        op.desc = "Icon View"
+        # op = row.operator("cio.manage_hierarchies",icon="SNAP_VERTEX",text="")
+        # op.operation = CIO_OP_SET_VIEWTYPE
+        # op.idx=CIO_VIEWTYPE_ICON
+        # op.desc = "Icon View"
 
         # TODO: Think about a viable way to enable previews for parent-collections.
         # if hierarchy.detail_for_parent_collections:
