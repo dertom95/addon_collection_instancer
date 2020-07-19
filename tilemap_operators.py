@@ -14,13 +14,13 @@ class TMC_Operations:
     TMC_CAM_PRESET_ISO = "cam_iso"             # iso. (is this iso?)
 
 def parent_collection_to_csv_children(parent_collection,collection_names="",recursive=False):
-    for sub_col in parent_collection:
-        if sub_col.collection:
-            for child in sub_col.collection.children:
-                collection_names = child.name if collection_names=="" else "%s,%s"%(collection_names,child.name)
-                if recursive and len(child.children)>0:
-                    collection_names = parent_collection_to_csv_children(child,collection_names,True)
+    for child in parent_collection.children:
+        if child:
+            collection_names = child.name if collection_names=="" else "%s,%s"%(collection_names,child.name)
+            if recursive and len(child.children)>0:
+                collection_names = parent_collection_to_csv_children(child,collection_names,True)
     return collection_names
+
 
 class TMC_OT_CRUD_tilemaps(bpy.types.Operator):
     """ CRUD Tilemap """
@@ -51,7 +51,11 @@ class TMC_OT_CRUD_tilemaps(bpy.types.Operator):
 
         elif self.operation==TMC_Operations.TMC_OP_REQUEST_RENDER:
             tilemap = settings.tilemaps[self.idx]
-            collection_names = ""
+
+            collection_names=""
+            for parent_collection in tilemap.parent_collections:
+                if parent_collection.collection:
+                    collection_names = parent_collection_to_csv_children(parent_collection.collection,collection_names,tilemap.recursive)
 
             print("collection_name:%s" % collection_names)
             bpy.ops.tmc.render_tiles(scene_name="tilemap_scene"
@@ -59,7 +63,7 @@ class TMC_OT_CRUD_tilemaps(bpy.types.Operator):
                                         ,output_folder=tilemap.output_path
                                         ,render_width=tilemap.render_size[0]
                                         ,render_height=tilemap.render_size[1]
-                                        ,cam_delta_scale=tilemap.cam_delta_scale
+                                        ,cam_ortho_scale=tilemap.cam_ortho_scale
                                         ,remove_scene=True)
 
         return{'FINISHED'}      
@@ -141,9 +145,13 @@ class TMC_OT_Render_tiles(bpy.types.Operator):
             bpy.context.scene.render.resolution_y = self.render_height
             bpy.context.scene.render.film_transparent = True
 
+            print("COLNAMES INPUT:%s" %self.col_names)
+
             colnames = self.col_names.split(",")
 
             for col_name in colnames:
+                print("Process:%s" % col_name)
+
                 col_name = col_name.strip() 
                 if col_name not in bpy.data.collections:
                     print("Unknown collection:%s" % col_name)

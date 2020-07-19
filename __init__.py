@@ -363,10 +363,8 @@ class CIO_PT_main(bpy.types.Panel):
                         if idx+1 >= len(current_collection.children):
                             b2.label(text="empty",icon="META_PLANE")
                         current_box = b1
-                        print("B111")
                     else:
                         current_box = b2
-                        print("B22")
 
                 row = current_box.row()
                 if found_icons and settings.view_type==CIO_VIEWTYPE_TEXT:
@@ -386,7 +384,6 @@ class CIO_PT_main(bpy.types.Panel):
                     row.template_icon(icon_value=col_icon_iso.icon_id,scale=settings.icon_size)
                     row.template_icon(icon_value=col_icon_top.icon_id,scale=settings.icon_size)
                 elif settings.view_type==CIO_VIEWTYPE_ICON:
-                    print("%s | %s | %s" % (col.name,found_icons,col_icon_top))
                     row.template_icon(icon_value=col_icon_iso.icon_id,scale=settings.icon_size)
 
                 
