@@ -59,11 +59,12 @@ class CIO_COLLECTION_TYPE(bpy.types.PropertyGroup):
 class CIO_HIERARCHY(bpy.types.PropertyGroup):
     active          : bpy.props.BoolProperty(default=True)
     collection_path : bpy.props.CollectionProperty(type=CIO_COLLECTION_TYPE)
-    icon_scale  : bpy.props.FloatProperty(default=6.0)    
+    icon_scale      : bpy.props.FloatProperty(default=6.0)    
     detail_for_parent_collections : bpy.props.BoolProperty(description="Show Details also for non-leaf-collections")
+    instance_scale  : bpy.props.FloatProperty(default=1.0,description="size of the created instance") 
 
 class CIO_WRLD_Settings(bpy.types.PropertyGroup):
-    show_manage_hierachy_menu : bpy.props.BoolProperty(name="Hierarchy Manager",default=False)
+    show_manage_hierachy_menu : bpy.props.BoolProperty(name="Settings",default=False)
     hierarchies : bpy.props.CollectionProperty(type=CIO_HIERARCHY)
     icon_folder : bpy.props.StringProperty(subtype="DIR_PATH")
     view_type   : bpy.props.IntProperty()
@@ -156,8 +157,23 @@ class CIO_OT_Manage_hierarchies(bpy.types.Operator):
         elif self.operation==CIO_OP_CREATE_INSTANCE:
             try:
                 cursor_position = bpy.context.scene.cursor.location
-                bpy.ops.object.collection_instance_add(collection=self.col_name, align='WORLD', location=cursor_position, scale=(1, 1, 1))
+                hierarchy = settings.hierarchies[self.hidx]
+                print("Scale: %s" % hierarchy.instance_scale)
+                scale = hierarchy.instance_scale
 
+                source_collection = bpy.data.collections[self.col_name]
+                instance_obj = bpy.data.objects.new(
+                    name=self.col_name, 
+                    object_data=None
+                )
+                instance_obj.instance_collection = source_collection
+                instance_obj.instance_type = 'COLLECTION'
+                instance_obj.location = cursor_position
+                instance_obj.scale = (scale, scale, scale)
+                parent_collection = bpy.context.view_layer.active_layer_collection
+                parent_collection.collection.objects.link(instance_obj)
+
+                #bpy.ops.object.collection_instance_add(collection=self.col_name, align='WORLD', location=cursor_position, scale=(scale, scale, scale))
             except Exception:
                 print("Error on %s: col_name:%s " % (CIO_OP_CREATE_INSTANCE,self.col_name))
                 traceback.print_exc()
@@ -308,6 +324,11 @@ class CIO_PT_main(bpy.types.Panel):
 
 
         row.prop(settings,"icon_size",text="Icon Size")
+        
+        instancing_view = without_children_box.box()
+        row = instancing_view.row()
+        row.prop(hierarchy,"instance_scale",text="Instance Scale")
+
 
 
         row = without_children_box.row()
@@ -375,6 +396,7 @@ class CIO_PT_main(bpy.types.Panel):
             op = row.operator("cio.manage_hierarchies",text="",icon="OUTLINER_OB_GROUP_INSTANCE")
             op.operation=CIO_OP_CREATE_INSTANCE
             op.col_name=col.name 
+            op.hidx = hidx
 
 
             if found_icons and (not has_children or hierarchy.detail_for_parent_collections):
