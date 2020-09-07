@@ -180,3 +180,45 @@ class TMC_OT_Render_tiles(bpy.types.Operator):
 
         return{'FINISHED'}
 
+
+
+## TODO: Can we use this and create an operator out of it
+def rearrange_objects(col_size=15,distance=2.0):
+    current_x=0
+    current_y=0
+    for obj in bpy.data.objects:
+        if obj.type!="MESH":
+            continue
+        
+        obj.location = (current_x,current_y,0)
+        for col in obj.users_collection:
+            col.instance_offset = obj.location
+        
+        current_x += distance
+        
+        if current_x >= col_size * distance:
+            current_x = 0
+            current_y += distance
+
+def rearrange_collections(col_size=15,distance=2.0):
+    current_x=0
+    current_y=0
+    
+    for col in bpy.data.collections:
+        master_loc = col.instance_offset
+        for obj in col.objects:
+            if obj.type!="MESH":
+                continue
+
+            delta = master_loc - obj.location
+            obj.location = (current_x-delta[0],current_y-delta[1],0)
+                
+        col.instance_offset=(current_x,current_y,0)
+        
+        current_x += distance
+        if current_x >= col_size * distance:
+            current_x = 0
+            current_y += distance
+    
+    
+#rearrange_collections()      

@@ -94,8 +94,13 @@ def check_for_img_library(hierarchy,load=False):
     top_img_lib = get_image_lib("%s_top"%root_name)
     if not iso_img_lib or not top_img_lib:
         if load:
-            bpy.ops.cio.manage_hierarchies(operation=CIO_OP_LOAD_TILE_PREVIEWS)
-            return True
+            try:
+                bpy.ops.cio.manage_hierarchies(operation=CIO_OP_LOAD_TILE_PREVIEWS)
+                return True
+            except Exception:
+                print("No previews?")
+                traceback.print_exc()
+                return false
         else:
             return False
 
@@ -172,6 +177,10 @@ class CIO_OT_Manage_hierarchies(bpy.types.Operator):
                 instance_obj.scale = (scale, scale, scale)
                 parent_collection = bpy.context.view_layer.active_layer_collection
                 parent_collection.collection.objects.link(instance_obj)
+
+                bpy.ops.object.select_all(action='DESELECT')
+                instance_obj.select_set(state=True)
+                bpy.context.view_layer.objects.active = o
 
                 #bpy.ops.object.collection_instance_add(collection=self.col_name, align='WORLD', location=cursor_position, scale=(scale, scale, scale))
             except Exception:
